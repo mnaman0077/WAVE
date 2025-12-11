@@ -34,7 +34,7 @@ export default function ProductPage() {
 
     const handleBuy = () => {
         // Redirect to the simulated checkout
-        router.push(`/site1/checkout?product=${id}`);
+        router.push(`/live-demo/checkout?product=${id}`);
     };
 
     return (
