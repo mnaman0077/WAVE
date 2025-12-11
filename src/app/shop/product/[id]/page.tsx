@@ -7,19 +7,13 @@ import { ShoppingCart, ArrowLeft } from "lucide-react";
 import { db } from "@/lib/firebase";
 import { ref, update } from "firebase/database";
 
-// Mock Data (In real app, fetch from DB)
-const PRODUCTS: Record<string, any> = {
-    "nike-air-max": { id: "nike-air-max", name: "Nike Air Max 90", price: 129.99, image: "https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=800&q=80", desc: "The original runner." },
-    "adidas-ultraboost": { id: "adidas-ultraboost", name: "Adidas Ultraboost", price: 180.00, image: "https://images.unsplash.com/photo-1587563871167-1ee7973bef0b?auto=format&fit=crop&w=800&q=80", desc: "Energy return." },
-    "jordan-1-retro": { id: "jordan-1-retro", name: "Air Jordan 1 Retro", price: 170.00, image: "https://images.unsplash.com/photo-1516478177764-9fe5bd7e9717?auto=format&fit=crop&w=800&q=80", desc: "The classic." },
-    "yeezy-boost": { id: "yeezy-boost", name: "Yeezy Boost 350", price: 220.00, image: "https://images.unsplash.com/photo-1608231387042-66d1773070a5?auto=format&fit=crop&w=800&q=80", desc: "Iconic style." },
-};
+import { PRODUCTS } from "@/lib/products";
 
 export default function ProductPage() {
     const params = useParams();
     const router = useRouter();
     const id = params.id as string;
-    const product = PRODUCTS[id];
+    const product = PRODUCTS.find(p => p.id === id);
 
     useEffect(() => {
         const sessionId = localStorage.getItem("wave_session_id");
@@ -56,8 +50,14 @@ export default function ProductPage() {
 
                 <div className="space-y-8">
                     <div>
-                        <h1 className="text-4xl font-black mb-2">{product.name}</h1>
-                        <p className="text-2xl text-blue-600 font-bold">${product.price.toFixed(2)}</p>
+                        <h1 className="text-4xl font-black mb-2 leading-tight">{product.name}</h1>
+                        <div className="flex items-center gap-4">
+                            <p className="text-3xl text-red-600 font-black">${product.price.toFixed(2)}</p>
+                            <div className="flex flex-col">
+                                <p className="text-gray-400 line-through text-lg font-medium">${product.originalPrice.toFixed(2)}</p>
+                                <p className="text-xs text-red-500 font-bold uppercase tracking-wide">40% Off Limited Time</p>
+                            </div>
+                        </div>
                     </div>
 
                     <p className="text-gray-600 text-lg leading-relaxed">
@@ -80,6 +80,6 @@ export default function ProductPage() {
                     </div>
                 </div>
             </main>
-        </div>
+        </div >
     );
 }

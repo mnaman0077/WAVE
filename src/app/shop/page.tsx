@@ -6,12 +6,7 @@ import { ShoppingBag } from "lucide-react";
 import { ref, set, update } from "firebase/database";
 import { db } from "@/lib/firebase";
 
-const PRODUCTS = [
-    { id: "nike-air-max", name: "Nike Air Max 90", price: 129.99, image: "https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=600&q=80" },
-    { id: "adidas-ultraboost", name: "Adidas Ultraboost", price: 180.00, image: "https://images.unsplash.com/photo-1587563871167-1ee7973bef0b?auto=format&fit=crop&w=600&q=80" },
-    { id: "jordan-1-retro", name: "Air Jordan 1 Retro", price: 170.00, image: "https://images.unsplash.com/photo-1516478177764-9fe5bd7e9717?auto=format&fit=crop&w=600&q=80" },
-    { id: "yeezy-boost", name: "Yeezy Boost 350", price: 220.00, image: "https://images.unsplash.com/photo-1608231387042-66d1773070a5?auto=format&fit=crop&w=600&q=80" },
-];
+import { PRODUCTS } from "@/lib/products";
 
 export default function ShopHome() {
     useEffect(() => {
@@ -65,20 +60,35 @@ export default function ShopHome() {
             </div>
 
             {/* Grid */}
-            <main className="max-w-6xl mx-auto px-6 py-16">
-                <h2 className="text-2xl font-bold mb-8">Trending Now</h2>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
+            <main className="max-w-7xl mx-auto px-6 py-16">
+                <div className="flex items-end justify-between mb-8">
+                    <div>
+                        <h2 className="text-3xl font-bold">Trending Now</h2>
+                        <p className="text-gray-500 mt-2">Highly sought after items at market-beating prices.</p>
+                    </div>
+                    <div className="bg-red-500 text-white px-4 py-1 rounded-full text-sm font-bold animate-pulse">
+                        FLASHSALE: EXTRA 40% OFF
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-8">
                     {PRODUCTS.map((product) => (
                         <Link
                             key={product.id}
                             href={`/shop/product/${product.id}`}
                             className="group"
                         >
-                            <div className="aspect-square bg-gray-100 rounded-2xl mb-4 overflow-hidden group-hover:scale-105 transition-transform duration-300">
-                                <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
+                            <div className="aspect-square bg-gray-100 rounded-2xl mb-4 overflow-hidden relative group-hover:shadow-xl transition-all duration-300">
+                                <img src={product.image} alt={product.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                                <div className="absolute top-3 right-3 bg-white/90 backdrop-blur text-xs font-bold px-2 py-1 rounded shadow-sm">
+                                    -{Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100)}%
+                                </div>
                             </div>
-                            <h3 className="font-bold text-lg">{product.name}</h3>
-                            <p className="text-gray-500">${product.price.toFixed(2)}</p>
+                            <h3 className="font-bold text-sm leading-tight mb-1 truncate">{product.name}</h3>
+                            <div className="flex items-center gap-2">
+                                <p className="text-red-500 font-bold">${product.price.toFixed(2)}</p>
+                                <p className="text-gray-400 text-xs line-through">${product.originalPrice.toFixed(2)}</p>
+                            </div>
                         </Link>
                     ))}
                 </div>

