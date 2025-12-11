@@ -37,8 +37,8 @@ export default function CardVisual({ cardNumber, cardHolder, expiry, cvv, focuse
 
                 {/* Number */}
                 <div className="mb-6">
-                    <div className="text-2xl font-mono tracking-widest drop-shadow-md h-8">
-                        {cardNumber || "#### #### #### ####"}
+                    <div className="text-2xl font-mono tracking-widest drop-shadow-md h-8 whitespace-nowrap">
+                        {cardNumber.replace(/\s/g, '').replace(/(\d{4})/g, '$1 ').trim() || "#### #### #### ####"}
                     </div>
                 </div>
 
@@ -54,6 +54,12 @@ export default function CardVisual({ cardNumber, cardHolder, expiry, cvv, focuse
                         <div className="text-xs text-white/70 uppercase mb-1">Expires</div>
                         <div className="font-mono tracking-wider">
                             {expiry || "MM/YY"}
+                        </div>
+                    </div>
+                    <div className="ml-4">
+                        <div className="text-xs text-white/70 uppercase mb-1">CVV</div>
+                        <div className="font-mono tracking-wider">
+                            {cvv || "123"}
                         </div>
                     </div>
                 </div>

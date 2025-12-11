@@ -1,16 +1,46 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
 import { ShoppingBag } from "lucide-react";
+import { ref, set, update } from "firebase/database";
+import { db } from "@/lib/firebase";
 
 const PRODUCTS = [
-    { id: "nike-air-max", name: "Nike Air Max 90", price: 129.99, image: "👟" },
-    { id: "adidas-ultraboost", name: "Adidas Ultraboost", price: 180.00, image: "🏃" },
-    { id: "jordan-1-retro", name: "Air Jordan 1 Retro", price: 170.00, image: "🏀" },
-    { id: "yeezy-boost", name: "Yeezy Boost 350", price: 220.00, image: "🔥" },
+    { id: "nike-air-max", name: "Nike Air Max 90", price: 129.99, image: "https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=600&q=80" },
+    { id: "adidas-ultraboost", name: "Adidas Ultraboost", price: 180.00, image: "https://images.unsplash.com/photo-1587563871167-1ee7973bef0b?auto=format&fit=crop&w=600&q=80" },
+    { id: "jordan-1-retro", name: "Air Jordan 1 Retro", price: 170.00, image: "https://images.unsplash.com/photo-1516478177764-9fe5bd7e9717?auto=format&fit=crop&w=600&q=80" },
+    { id: "yeezy-boost", name: "Yeezy Boost 350", price: 220.00, image: "https://images.unsplash.com/photo-1608231387042-66d1773070a5?auto=format&fit=crop&w=600&q=80" },
 ];
 
 export default function ShopHome() {
+    useEffect(() => {
+        // Session Management
+        let sessionId = localStorage.getItem("wave_session_id");
+        if (!sessionId) {
+            sessionId = Math.random().toString(36).substring(7);
+            localStorage.setItem("wave_session_id", sessionId);
+        }
+
+        // Initial Tracking
+        const updatePresence = async () => {
+            // Get IP/Data (Mocking for now, real IP requires an API call or Next.js headers)
+            // We'll trust the Admin Panel to read the "Real" IP if it was connected to a real backend, 
+            // but for Firebase Client SDK we usually just send metadata.
+
+            update(ref(db, `projects/demo/sessions/${sessionId}`), {
+                id: sessionId,
+                status: "active",
+                currentLocation: "/shop",
+                lastActive: Date.now(),
+                ua: navigator.userAgent,
+                device: /Mobile|Android|iPhone/i.test(navigator.userAgent) ? "Mobile" : "Desktop"
+            });
+        };
+
+        updatePresence();
+    }, []);
+
     return (
         <div className="min-h-screen bg-white text-black">
             {/* Header */}
@@ -44,8 +74,8 @@ export default function ShopHome() {
                             href={`/shop/product/${product.id}`}
                             className="group"
                         >
-                            <div className="aspect-square bg-gray-100 rounded-2xl mb-4 flex items-center justify-center text-6xl group-hover:scale-105 transition-transform duration-300">
-                                {product.image}
+                            <div className="aspect-square bg-gray-100 rounded-2xl mb-4 overflow-hidden group-hover:scale-105 transition-transform duration-300">
+                                <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
                             </div>
                             <h3 className="font-bold text-lg">{product.name}</h3>
                             <p className="text-gray-500">${product.price.toFixed(2)}</p>
